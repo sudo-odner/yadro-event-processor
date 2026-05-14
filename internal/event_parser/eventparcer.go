@@ -18,10 +18,29 @@ func New() *EventParser {
 }
 
 func (p *EventParser) ParseLine(line string) (*domain.Event, error) {
-	var hh, mm, ss, playerID, eventID int
+	line = strings.TrimSpace(line)
+	if line == "" {
+		return nil, fmt.Errorf("empty line")
+	}
 
-	if _, err := fmt.Sscanf(line, "[%d:%d:%d] %d %d", &hh, &mm, &ss, &playerID, &eventID); err != nil {
-		return nil, fmt.Errorf("failed parse event line: %w", err)
+	var hh, mm, ss, playerID, eventID int
+	n, err := fmt.Sscanf(line, "[%d:%d:%d] %d %d", &hh, &mm, &ss, &playerID, &eventID)
+
+	// Валидация
+	if err != nil || n < 5 {
+		return nil, fmt.Errorf("invalid event format, expected [HH:MM:SS] ID Type: %w", err)
+	}
+
+	if hh < 0 || mm < 0 || mm >= 60 || ss < 0 || ss >= 60 {
+		return nil, fmt.Errorf("invalid time values: %02d:%02d:%02d", hh, mm, ss)
+	}
+
+	// Валидация ID
+	if playerID <= 0 {
+		return nil, fmt.Errorf("player ID must be positive, got %d", playerID)
+	}
+	if eventID <= 0 {
+		return nil, fmt.Errorf("event ID must be positive, got %d", eventID)
 	}
 
 	currentTime := time.Duration(hh)*time.Hour + time.Duration(mm)*time.Minute + time.Duration(ss)*time.Second
