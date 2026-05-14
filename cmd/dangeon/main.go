@@ -8,6 +8,7 @@ import (
 
 	"github.com/sudo-odner/yadro-event-processor/internal/config"
 	eventparser "github.com/sudo-odner/yadro-event-processor/internal/event_parser"
+	"github.com/sudo-odner/yadro-event-processor/internal/processor"
 )
 
 func main() {
@@ -23,7 +24,9 @@ func main() {
 
 	cfg := config.MustLoad(*configPath)
 	parser := eventparser.New()
+	proc := processor.New(cfg)
 
+	var scanner *bufio.Scanner
 	if *eventsPath != "" {
 		// если есть читаем файл и выводим ответ
 		file, err := os.Open(*eventsPath)
@@ -32,28 +35,34 @@ func main() {
 			return
 		}
 		defer file.Close()
-
-		processScanner(bufio.NewScanner(file), cfg, parser)
+		scanner = bufio.NewScanner(file)
 	} else {
 		// real-time ввод
-		processScanner(bufio.NewScanner(os.Stdin), cfg, parser)
+		scanner = bufio.NewScanner(os.Stdin)
 	}
-}
 
-func processScanner(scanner *bufio.Scanner, cfg *config.Config, pr *eventparser.EventParser) {
 	for scanner.Scan() {
 		line := scanner.Text()
 		if line == "" {
 			continue
 		}
-		fmt.Println(pr.ParceLine(line))
-		// System analiz
-		_ = cfg
+		ev, err := parser.ParceLine(line)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error parsing line: %v\n", err)
+			continue
+		}
+		proc.ProcessEvent(ev)
 	}
 
 	if err := scanner.Err(); err != nil {
 		fmt.Printf("ERROR: failed during scanning: %v\n", err)
 	}
 
+	// Ивенты
+	for _, event := range proc.GetEvents() {
+		fmt.Println(event)
+	}
+
 	// Report
+	fmt.Print(proc.GetReport())
 }
