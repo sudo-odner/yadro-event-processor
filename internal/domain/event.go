@@ -15,7 +15,7 @@ const (
 	EvLeftDungeon         EventType = 8
 	EvReason              EventType = 9
 	EvHealth              EventType = 10
-	EvDemage              EventType = 11
+	EvDamage              EventType = 11
 	EvDisqual             EventType = 31
 	EvDead                EventType = 32
 	EvImposibleMove       EventType = 33
