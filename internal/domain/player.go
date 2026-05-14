@@ -8,29 +8,29 @@ import (
 type Status string
 
 const (
-	StatusIncomple Status = "INCOMPLETE" // Ситуация когда логи закончились, но иргок в подземелье(или на поаерхности) и подземелье не закрыто
-	StatusSuccess  Status = "SUCCESS"
-	StatusFail     Status = "FAIL"
-	StatusDisqual  Status = "DISQUAL"
+	StatusIncomplete Status = "INCOMPLETE" // Ситуация когда логи закончились, но игрок в подземелье(или на поверхности) и подземелье не закрыто
+	StatusSuccess    Status = "SUCCESS"
+	StatusFail       Status = "FAIL"
+	StatusDisqual    Status = "DISQUAL"
 )
 
 type Player struct {
-	ID         int
-	HP         int
-	Status     Status
-	IsRegisted bool
-	StartedAt  time.Duration // Время входа в полземелье
-	FinishedAt time.Duration // Время завершения подземельея (выход, смерть и т.д.)
+	ID           int
+	HP           int
+	Status       Status
+	IsRegistered bool
+	StartedAt    time.Duration // Время входа в подземелье
+	FinishedAt   time.Duration // Время завершения подземелья (выход, смерть и т.д.)
 
 	Floors       []FloorProgress
 	CurrentFloor int
 }
 
 type FloorProgress struct {
-	TotalTimeSpent time.Duration // Общее время находения на этаже
+	TotalTimeSpent time.Duration // Общее время нахождения на этаже
 	LastEntryTime  time.Duration // Время последнего входа на этаж
 
-	Numver         int
+	Number         int
 	Monsters       int
 	MonstersKilled int
 	IsBoss         bool
@@ -46,10 +46,13 @@ func durationToString(t time.Duration) string {
 
 func (p *Player) Report() string {
 	// Случай когда игрок в подземелье(или на поверхности) и подземелье еще не закрыто
-	if p.Status == StatusIncomple {
+	if p.Status == StatusIncomplete {
 		return fmt.Sprintf("[%s] %d HP:%d", p.Status, p.ID, p.HP)
 	}
-	timeInDungeon := p.FinishedAt - p.StartedAt
+	var timeInDungeon time.Duration
+	if p.StartedAt > 0 {
+		timeInDungeon = p.FinishedAt - p.StartedAt
+	}
 
 	var sumTimeCompletedFloor time.Duration
 	var timeCompletedBoss time.Duration
