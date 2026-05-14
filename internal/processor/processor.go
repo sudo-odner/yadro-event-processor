@@ -27,21 +27,20 @@ func (p *Processor) ProcessEvent(ev *domain.Event) {
 	player, ok := p.players[ev.PlayerID]
 	if !ok {
 		player = &domain.Player{
-			ID:     ev.PlayerID,
-			HP:     100,
-			Status: domain.StatusIncomplete,
+			ID: ev.PlayerID,
+			HP: 100,
 		}
 		p.players[ev.PlayerID] = player
 	}
 
-	if player.Status != "" && player.Status != domain.StatusIncomplete {
-		// Игрок зкончил свой путь странствий
+	if player.Status != "" {
+		// Игрок закончил свой путь странствий
 		return
 	}
 
-	// Если пытаемся зайти в подземелье, когда уже закрыта
-	if ev.Time > p.cfg.CloseAt {
-		p.finishPlayer(player, ev.Time, domain.StatusFail)
+	// Если пытаемся что-то делать после закрытия подземелья
+	if ev.Time >= p.cfg.CloseAt {
+		p.finishPlayer(player, p.cfg.CloseAt, domain.StatusFail)
 		return
 	}
 
@@ -58,15 +57,14 @@ func (p *Processor) ProcessEvent(ev *domain.Event) {
 
 	case domain.EvEntered:
 		if player.StartedAt != 0 {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		if ev.Time < p.cfg.OpenAt.Duration {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		player.StartedAt = ev.Time
-		player.Status = domain.StatusIncomplete
 		player.CurrentFloor = 0
 		player.Floors = make([]domain.FloorProgress, p.cfg.Floors)
 		for i := 0; i < len(player.Floors)-1; i++ {
@@ -76,7 +74,7 @@ func (p *Processor) ProcessEvent(ev *domain.Event) {
 			}
 		}
 		player.Floors[len(player.Floors)-1] = domain.FloorProgress{
-			Number: 1 + len(player.Floors) - 1,
+			Number: len(player.Floors),
 			IsBoss: true,
 		}
 		player.Floors[0].LastEntryTime = ev.Time
@@ -84,12 +82,12 @@ func (p *Processor) ProcessEvent(ev *domain.Event) {
 
 	case domain.EvKillMonster:
 		if player.StartedAt == 0 || player.CurrentFloor >= p.cfg.Floors || player.Floors[player.CurrentFloor].IsBoss {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		f := &player.Floors[player.CurrentFloor]
 		if f.IsCompleted {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		f.MonstersKilled++
@@ -101,7 +99,7 @@ func (p *Processor) ProcessEvent(ev *domain.Event) {
 
 	case domain.EvNextFloor:
 		if player.StartedAt == 0 || player.CurrentFloor >= p.cfg.Floors-1 {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		f := &player.Floors[player.CurrentFloor]
@@ -114,7 +112,7 @@ func (p *Processor) ProcessEvent(ev *domain.Event) {
 
 	case domain.EvPreviousFloor:
 		if player.StartedAt == 0 || player.CurrentFloor <= 0 {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		f := &player.Floors[player.CurrentFloor]
@@ -127,19 +125,19 @@ func (p *Processor) ProcessEvent(ev *domain.Event) {
 
 	case domain.EvEnteredTheBossFloor:
 		if player.StartedAt == 0 || player.CurrentFloor != p.cfg.Floors-1 {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		p.logEvent(ev.Time, "Player [%d] entered the boss's floor", player.ID)
 
 	case domain.EvKillBoss:
 		if player.StartedAt == 0 || player.CurrentFloor != p.cfg.Floors-1 || !player.Floors[player.CurrentFloor].IsBoss {
-			p.inpossibleMove(player, ev.Time, ev.Type)
+			p.impossibleMove(player, ev.Time, ev.Type)
 			return
 		}
 		f := &player.Floors[player.CurrentFloor]
 		f.IsCompleted = true
-		f.TotalTimeSpent = ev.Time - f.LastEntryTime
+		f.TotalTimeSpent += ev.Time - f.LastEntryTime
 		p.logEvent(ev.Time, "Player [%d] killed the boss", player.ID)
 
 	case domain.EvLeftDungeon:
@@ -190,11 +188,11 @@ func (p *Processor) logEvent(t time.Duration, format string, args ...any) {
 	hh := t / time.Hour
 	mm := (t % time.Hour) / time.Minute
 	ss := (t % time.Minute) / time.Second
-	timeStr := fmt.Sprintf("%02d:%02d:%02d", hh, mm, ss)
+	timeStr := fmt.Sprintf("[%02d:%02d:%02d]", hh, mm, ss)
 	p.events = append(p.events, fmt.Sprintf("%s %s", timeStr, fmt.Sprintf(format, args...)))
 }
 
-func (p *Processor) inpossibleMove(player *domain.Player, t time.Duration, evType domain.EventType) {
+func (p *Processor) impossibleMove(player *domain.Player, t time.Duration, evType domain.EventType) {
 	p.logEvent(t, "Player [%d] makes imposible move [%d]", player.ID, evType)
 }
 
@@ -205,15 +203,28 @@ func (p *Processor) disqualify(player *domain.Player, t time.Duration) {
 }
 
 func (p *Processor) finishPlayer(player *domain.Player, t time.Duration, status domain.Status) {
-	if player.Status != domain.StatusIncomplete {
+	if player.Status != "" {
 		return
 	}
 	player.Status = status
 	player.FinishedAt = t
-	if 0 < player.CurrentFloor && player.CurrentFloor < len(player.Floors) {
+	if 0 <= player.CurrentFloor && player.CurrentFloor < len(player.Floors) {
 		f := &player.Floors[player.CurrentFloor]
 		if !f.IsCompleted {
 			f.TotalTimeSpent += t - f.LastEntryTime
+		}
+	}
+}
+
+func (p *Processor) CloseDungeon() {
+	closeTime := p.cfg.CloseAt
+	for _, player := range p.players {
+		if player.Status == "" {
+			if player.StartedAt > 0 {
+				p.finishPlayer(player, closeTime, domain.StatusFail)
+			} else {
+				p.finishPlayer(player, player.FinishedAt, domain.StatusDisqual)
+			}
 		}
 	}
 }

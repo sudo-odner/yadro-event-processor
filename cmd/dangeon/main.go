@@ -46,7 +46,7 @@ func main() {
 		if line == "" {
 			continue
 		}
-		ev, err := parser.ParceLine(line)
+		ev, err := parser.ParseLine(line)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing line: %v\n", err)
 			continue
@@ -57,6 +57,9 @@ func main() {
 	if err := scanner.Err(); err != nil {
 		fmt.Printf("ERROR: failed during scanning: %v\n", err)
 	}
+
+	// Если логи закончились и у нас остались в подземелье люди, то счтитаем что они проиграли
+	proc.CloseDungeon()
 
 	// Ивенты
 	for _, event := range proc.GetEvents() {

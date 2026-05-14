@@ -8,10 +8,9 @@ import (
 type Status string
 
 const (
-	StatusIncomplete Status = "INCOMPLETE" // Ситуация когда логи закончились, но игрок в подземелье(или на поверхности) и подземелье не закрыто
-	StatusSuccess    Status = "SUCCESS"
-	StatusFail       Status = "FAIL"
-	StatusDisqual    Status = "DISQUAL"
+	StatusSuccess Status = "SUCCESS"
+	StatusFail    Status = "FAIL"
+	StatusDisqual Status = "DISQUAL"
 )
 
 type Player struct {
@@ -45,10 +44,6 @@ func durationToString(t time.Duration) string {
 }
 
 func (p *Player) Report() string {
-	// Случай когда игрок в подземелье(или на поверхности) и подземелье еще не закрыто
-	if p.Status == StatusIncomplete {
-		return fmt.Sprintf("[%s] %d HP:%d", p.Status, p.ID, p.HP)
-	}
 	var timeInDungeon time.Duration
 	if p.StartedAt > 0 {
 		timeInDungeon = p.FinishedAt - p.StartedAt
